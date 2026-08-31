@@ -46,4 +46,17 @@ This two grapth we made.
 
 <img width="1914" height="987" alt="image" src="https://github.com/user-attachments/assets/8a84d079-d6fb-40d2-93d7-3db1b78db661" />
 
+About the Author
 
+Alperen Korkmaz
+Undergraduate Student | BSc Biology (4rd Year), Gazi University
+
+I am a Biology undergraduate student with a strong focus on bioinformatics, computational biology, and data science. I am passionate about bridging the gap between molecular biology and computational solutions, specifically in transcriptomic data analysis, variant calling workflows, and evolutionary genetics. I actively build analytical pipelines using R and Linux environments.
+
+This repository serves as a portfolio piece demonstrating my proficiency in processing and visualizing high-throughput genomic data.
+
+Let's Connect:
+
+Email: [alperen57korkmaz@gmail.com]
+LinkedIn: [https://www.linkedin.com/in/alperen-korkmaz-ba4b32322/]
+Project Report: [https://alperen-korkmaz-57.github.io/A-GEO-dataset-analysis./]
