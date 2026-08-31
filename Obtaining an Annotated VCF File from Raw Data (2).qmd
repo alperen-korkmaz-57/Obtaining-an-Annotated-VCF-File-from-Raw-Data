@@ -1,0 +1,167 @@
+---
+title: "Obtaining an Annotated VCF File from Raw Data" 
+author: "Alperen Korkmaz" 
+format: 
+  html:
+    theme: cosmo
+    toc: true
+    toc-title: "Contents"
+    code-fold: show
+editor: visual 
+---
+
+## Introduction to the Bioinformatics Pipeline
+
+We set up our variant calling pipeline in the Linux environment and successfully annotated our VCF file. In this report, we will clean our genomic data, perform exploratory data analysis, and create visualizations to better understand the mutation profiles.
+
+### 1. Loading Required Packages
+
+First, we install and load the necessary libraries for data wrangling and visualization.
+
+```{r}
+#| message: false
+#| warning: false
+
+library(vcfR)
+library(dplyr)
+library(ggplot2)
+library(stringr)
+library(tidyr)
+library(knitr)
+library(DT) # Added for interactive HTML tables
+```
+
+### 2. Importing and Tidying the VCF Data
+
+We import the annotated VCF file generated in our Linux environment. By using the `vcfR2tidy` command, we automatically extract the fixed fields into a structured data frame.
+
+*(Note: Ensure that the VCF file is in the same working directory as this script.)*
+
+```{r}
+#| message: false
+#| warning: false
+
+vcf <- read.vcfR("F350066296_L01_14_anotation_mutations.vcf")
+F350066296 <- vcfR2tidy(vcf)
+```
+
+Now, let's take a quick look at our raw data structure using an interactive table.
+
+```{r}
+#| warning: false
+
+# Replaced View() with datatable() for HTML rendering
+datatable(head(F350066296$fix, 50), 
+          options = list(scrollX = TRUE, pageLength = 5),
+          caption = "Raw VCF Fixed Fields (First 50 Rows)")
+```
+
+### 3. Parsing the Annotation Column (SnpEff)
+
+The genomic data was annotated using SnpEff, but the results are contained within a single `ANN` column separated by pipes (`|`). We need to separate this data to isolate biological consequences. We will also filter for `HIGH` and `MODERATE` impact variants to focus on clinically relevant mutations.
+
+```{r}
+#| warning: false
+
+ANNOTATION_MUT <- F350066296$fix |> 
+  mutate(ANN_first_result = str_remove(ANN, ",.*")) |> 
+  separate(
+    col = ANN_first_result,
+    into = c("Allele", "Mutation_Type","Degree_of_Impact","Gene","Gene_ID","Feature_Type","Feature_ID","Transcript_Biotype","Rank","HGVS.c","HGVS.p","cDNA_pos","CDS_pos","Protein_pos","Distance", "Warnings"),
+    sep = "\\|",
+    extra = "drop",
+    fill = "right"
+  ) |> select(CHROM, POS, REF, ALT ,Gene, Mutation_Type, Degree_of_Impact, HGVS.p, QUAL) |>
+  filter(Degree_of_Impact %in% c("HIGH", "MODERATE"))
+```
+
+### 4. Preparing the Clinical Database Query Table
+
+To facilitate downstream clinical interpretation, we format the variant locations to be easily searchable in professional databases like **Franklin (Genoox)** and **VarSome**.
+
+```{r}
+clinic_search_table <- ANNOTATION_MUT |> 
+  mutate(
+    genomic_location = paste0(CHROM, ":", POS, " ", REF, ">", ALT),
+    HGVS_search_term = paste0(Gene, " ", HGVS.p),
+    Varsome_search = paste0(CHROM, ":", POS, " ", REF, ">", ALT),
+    Franklin_search = paste0(CHROM, ":", POS, " ", REF, ">", ALT)
+  ) |> 
+  select(Gene, Degree_of_Impact, Mutation_Type, HGVS.p, Varsome_search, Franklin_search, QUAL) |> 
+  filter(Degree_of_Impact %in% c("HIGH", "MODERATE"))
+
+datatable(clinic_search_table, 
+          options = list(scrollX = TRUE, pageLength = 5),
+          caption = "Actionable Variants for Franklin / VarSome Analysis")
+```
+
+### 5. Exploratory Data Visualization
+
+Now we create visualizations to better understand the mutation distribution across our genomic sample.
+
+#### 5.1 Distribution of Mutation Types
+
+This graph primarily shows the distribution of mutation types (e.g., missense, frameshift) among the high and moderate impact variants.
+
+```{r}
+clinic_search_table |> 
+  filter(!is.na(Mutation_Type)) |> 
+  count(Mutation_Type, sort = TRUE) |>
+  head(10) |> 
+  ggplot(aes(x = reorder(Mutation_Type, n), y = n, fill = Mutation_Type)) +
+  geom_col(color = "black") +
+  coord_flip() +
+  labs(
+    title = "Distribution of Mutation Types",
+    x = "Mutation Type",
+    y = "Frequency"
+  ) +
+  scale_fill_viridis_d(option = "plasma") +
+  theme_minimal(base_size = 14) +
+  theme(legend.position = "none")
+```
+
+#### 5.2 The Most Mutated Genes
+
+This graph illustrates the top 10 genes harboring the most significant mutations in the annotated VCF file.
+
+```{r}
+clinic_search_table |> 
+  filter(!is.na(Gene) & Gene != "") |> 
+  count(Gene, sort = TRUE) |> 
+  head(10) |> 
+  ggplot(aes(x = reorder(Gene, n), y = n, fill = Gene)) +
+  geom_col(color = "black", alpha = 0.8) +
+  coord_flip() +
+  labs(
+    title = "The 10 Most Mutated Genes",
+    subtitle = "Results from the Annotated VCF File",
+    x = "Gene Name",
+    y = "Mutation Count"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    legend.position = "none",
+    plot.title = element_text(face = "bold", color = "#2c3e50")
+  )
+```
+
+### 6. Quality Control (QC) Metrics
+
+Finally, this table shows the average and maximum sequencing quality (`QUAL`) of the identified variants, grouped by their degree of biological impact. This step is crucial for verifying the reliability of our variant calls.
+
+```{r}
+qual_table <- clinic_search_table %>%
+  filter(!is.na(QUAL)) %>%
+  mutate(QUAL = as.numeric(QUAL)) %>% # Assuring QUAL is numeric for calculation
+  group_by(Degree_of_Impact) %>%
+  summarise(
+    Variant_Count = n(),
+    Average_Quality = round(mean(QUAL, na.rm = TRUE), 2),
+    Max_Quality = max(QUAL, na.rm = TRUE)
+  ) %>%
+  arrange(desc(Average_Quality))
+
+# Printing the summary table
+kable(qual_table, caption = "Quality Metrics Based on Impact Degree")
+```
