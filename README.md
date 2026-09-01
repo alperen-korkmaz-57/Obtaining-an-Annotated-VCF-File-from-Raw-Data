@@ -40,7 +40,8 @@ The `Obtaining an annotated VCF file from raw data.qmd` file processes the annot
 * stringr
 * knitr
 * DT
-This two grapth we made.
+* 
+This is two grapth we made.
 
 <img width="1915" height="981" alt="image" src="https://github.com/user-attachments/assets/806f6c09-1b77-4fe7-8575-07ae46481a0c" />
 
